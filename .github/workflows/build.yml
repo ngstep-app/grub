@@ -2,7 +2,7 @@ name: Build GRUB
 
 on:
   push:
-    branches: [master]
+    branches: [2.02-coreos]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
 
       - name: Generate build system
         run: |
-          ./autogen.sh
+          PYTHON=python3 ./autogen.sh
 
       - name: Build and install i386-pc target
         run: |
