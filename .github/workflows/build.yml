@@ -21,16 +21,20 @@ jobs:
           apt-get update
           apt-get install -y \
             git build-essential autoconf automake bison flex \
-            gettext python3 pkg-config \
+            gettext python3 pkg-config libtool \
             libdevmapper-dev libfreetype-dev \
             wget curl
 
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build GRUB
+      - name: Generate build system
         run: |
-          ./bootstrap
+          ./autogen.sh
+
+      - name: Build and install i386-pc target
+        run: |
+          PKG_DIR="$(pwd)/grub-gershwin"
           ./configure \
             --prefix=/usr \
             --sysconfdir=/etc \
@@ -38,8 +42,11 @@ jobs:
             --target=i386 \
             --disable-werror
           make -j$(nproc)
+          make DESTDIR="${PKG_DIR}" install
 
-          # Build x86_64-efi target
+      - name: Build and install x86_64-efi target
+        run: |
+          PKG_DIR="$(pwd)/grub-gershwin"
           make clean
           ./configure \
             --prefix=/usr \
@@ -48,38 +55,13 @@ jobs:
             --target=x86_64 \
             --disable-werror
           make -j$(nproc)
+          make DESTDIR="${PKG_DIR}" install
 
-      - name: Package GRUB
+      - name: Create .deb package
         run: |
           set -e
           PKG_DIR="$(pwd)/grub-gershwin"
-          mkdir -p "${PKG_DIR}/usr/lib/grub/i386-pc"
-          mkdir -p "${PKG_DIR}/usr/lib/grub/x86_64-efi"
-          mkdir -p "${PKG_DIR}/usr/bin"
           mkdir -p "${PKG_DIR}/DEBIAN"
-
-          # Build and install i386-pc target
-          ./configure \
-            --prefix=/usr \
-            --sysconfdir=/etc \
-            --with-platform=pc \
-            --target=i386 \
-            --disable-werror
-          make -j$(nproc)
-          make DESTDIR="${PKG_DIR}" install
-
-          # Build and install x86_64-efi target (modules only)
-          make clean
-          ./configure \
-            --prefix=/usr \
-            --sysconfdir=/etc \
-            --with-platform=efi \
-            --target=x86_64 \
-            --disable-werror
-          make -j$(nproc)
-          make DESTDIR="${PKG_DIR}" install
-
-          # Create .deb control file
           cat > "${PKG_DIR}/DEBIAN/control" << 'EOF'
           Package: grub-gershwin
           Version: 2.04-gershwin1
@@ -90,9 +72,7 @@ jobs:
           Provides: grub-pc-bin, grub-efi-amd64-bin, grub-common
           Conflicts: grub-pc-bin, grub-efi-amd64-bin
           EOF
-          # Fix indentation in control file
           sed -i 's/^          //' "${PKG_DIR}/DEBIAN/control"
-
           dpkg-deb --build "${PKG_DIR}" grub-gershwin_2.04-gershwin1_amd64.deb
 
       - name: Upload package
